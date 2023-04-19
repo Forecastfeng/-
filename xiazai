@@ -1,0 +1,70 @@
+import tushare as ts
+import os
+import pandas as pd
+from datetime import datetime, date
+
+# 用你自己的 Tushare token 替换
+TOKEN = '5c3cba2e580471aca98fc145a766eb4bce423624364fbffa75412c9f'
+ts.set_token(TOKEN)
+
+# 设置数据存储目录
+DATA_DIR = 'F:\\agushuju'
+
+def download_stock_data_by_code(stock_code, start_date, end_date, stock_type='stock'):
+    pro = ts.pro_api()
+    if stock_type == 'etf':
+        stock_data = pro.fund_daily(ts_code=stock_code, start_date=start_date, end_date=end_date, adj='qfq')
+    else:
+        stock_data = pro.daily(ts_code=stock_code, start_date=start_date, end_date=end_date, adj='qfq')
+    return stock_data
+
+def get_stock_list():
+    pro = ts.pro_api()
+    stock_list = pro.stock_basic(exchange='', list_status='L')
+    return stock_list
+
+def get_specific_etf_list():
+    return ['510050.SH', '510300.SH', '510500.SH', '159915.SZ', '159919.SZ', '159922.SZ', '159901.SZ']
+
+def update_stock_data(stock_list, start_date, end_date, stock_type='stock'):
+    print("开始更新数据")
+
+    if stock_type == 'stock':
+        stock_list = stock_list['ts_code'].tolist()
+
+    for stock_code in stock_list:
+        stock_data_file = os.path.join(DATA_DIR, f"{stock_code}.csv")
+        
+        if os.path.exists(stock_data_file):
+            existing_data = pd.read_csv(stock_data_file)
+            if not existing_data.empty:
+                latest_date = str(existing_data.iloc[-1]['trade_date'])
+                if latest_date != end_date:
+                    print(f"更新 {stock_code} 的数据")
+                    new_stock_data = download_stock_data_by_code(stock_code, latest_date, end_date, stock_type)
+                    updated_data = pd.concat([existing_data, new_stock_data], ignore_index=True)
+                    updated_data.to_csv(stock_data_file, index=False)
+            else:
+                print(f"重新下载 {stock_code} 的历史数据")
+                stock_data = download_stock_data_by_code(stock_code, start_date, end_date, stock_type)
+                stock_data.to_csv(stock_data_file, index=False)
+                print(f"历史数据已下载到：{stock_data_file}")
+        else:
+            print(f"下载 {stock_code} 的历史数据")
+            stock_data = download_stock_data_by_code(stock_code, start_date, end_date, stock_type)
+            stock_data.to_csv(stock_data_file, index=False)
+            print(f"历史数据已下载到：{stock_data_file}")
+
+
+if __name__ == '__main__':
+    if not os.path.exists(DATA_DIR):
+        os.makedirs(DATA_DIR)
+
+    stock_list = get_stock_list()
+    specific_etf_list = get_specific_etf_list()
+
+    start_date = '20200102'
+    end_date = '20230419'
+
+    update_stock_data(stock_list, start_date, end_date)
+    update_stock_data(specific_etf_list, start_date, end_date, stock_type='etf')
